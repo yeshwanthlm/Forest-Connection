@@ -1,0 +1,126 @@
+//RECIVEING TO MCU
+#include <ESP8266WiFi.h>
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+
+#define WLAN_SSID       "YashRam"
+#define WLAN_PASS       "yash1234"
+
+#define AIO_SERVER      "io.adafruit.com"
+#define AIO_SERVERPORT  1883                   
+#define AIO_USERNAME    "SmartForest"
+#define AIO_KEY         "aio_RKaY57RKW72Y5NSOY6OtSFC91AaV"
+
+
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+
+Adafruit_MQTT_Publish Humidity = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidity");
+Adafruit_MQTT_Publish Temperature = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temparature");
+Adafruit_MQTT_Publish CO2 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/co2");
+void MQTT_connect();
+
+RF24 radio(D4,D2); // CE, CSN
+const byte address[6] = "00001";
+void setup() {
+  Serial.begin(9600);
+  radio.begin();
+  radio.openReadingPipe(0, address);
+  radio.setPALevel(RF24_PA_MAX);
+  radio.startListening();
+
+   WiFi.begin(WLAN_SSID, WLAN_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  Serial.println("connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+
+  
+}
+void loop() {
+  delay(5000);
+  Serial.println("THE DATA RECIVED IS:");
+  if (radio.available()) {
+    char text[500]=""; 
+    radio.read(&text, sizeof(text));
+    Serial.println(text);
+    char a=text[1];
+    String t="",h="",node="",ana="";
+    node+=text[0];
+    t+=text[1];
+    t+=text[2];
+    h+=text[3];
+    h+=text[4];
+    ana+=text[6];
+    ana+=text[7];
+    ana+=text[8];
+    int temp,hum,co2;
+    
+    Serial.print("TEMP:");
+    Serial.println(t.toInt());
+    Serial.print("HUM:");
+    Serial.println(h.toInt());
+    Serial.print("Node:");
+    Serial.println(node.toInt());
+    Serial.print("Co2:");
+    Serial.println(ana.toInt());
+
+    temp=t.toInt();
+    hum=h.toInt();
+    co2=ana.toInt();
+    
+   if (! Humidity.publish(hum)) {
+       Serial.println(F("Failed"));
+       } else {
+        Serial.println(F("OK Humidity!"));
+        Serial.print("Humidity:");
+        Serial.println(hum);
+       }
+      if (! Temperature.publish(temp)) {
+      Serial.println(F("Failed"));
+       } else {
+      Serial.println(F("OK Tempareture!"));
+      Serial.print("TEMP:");
+      Serial.println(temp);
+       }
+       if (! CO2.publish(co2)) {
+     Serial.println(F("Failed"));
+     } else {
+     Serial.println(F("OK CO2!"));
+     Serial.print("CO2:");
+     Serial.println(co2);
+     }
+  }
+}
+
+void MQTT_connect() {
+  int8_t ret;
+  if (mqtt.connected()) {
+    return;
+  }
+
+  Serial.print("trying to connecting to MQTT... ");
+
+  uint8_t retries = 3;
+  while ((ret = mqtt.connect()) != 0) { 
+    Serial.println(mqtt.connectErrorString(ret));
+    Serial.println("Retrying MQTT connection in 5 seconds...");
+    mqtt.disconnect();
+    delay(5000);  
+    retries--;
+    if (retries == 0) {
+      while (1);
+    }
+  }
+  Serial.println("MQTT Connected");
+  delay(2000);
+}
